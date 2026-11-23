@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,7 @@ import com.dpireborn.app.AppViewModel
 import com.dpireborn.app.data.FileItem
 import com.dpireborn.app.data.LibraryFolder
 import com.dpireborn.app.data.PkgInfo
+import com.dpireborn.app.data.StoragePermission
 import com.dpireborn.app.ui.theme.OutlineDim
 import com.dpireborn.app.ui.theme.SurfaceDark
 import com.dpireborn.app.ui.theme.SurfaceHigh
@@ -90,6 +93,30 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.addFolder(uri)
+    }
+
+    // "Todo o celular": o Android 11+ bloqueia a pasta Download no seletor de pastas, então usamos
+    // a permissão "Acesso a todos os arquivos" (o usuário liga na tela de ajustes do Android).
+    val ctx = LocalContext.current
+    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        vm.addAllStorage()
+    }
+    val legacyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        vm.addAllStorage()
+    }
+    val scanAll: () -> Unit = {
+        if (StoragePermission.hasAllFiles(ctx)) {
+            vm.addAllStorage()
+        } else if (android.os.Build.VERSION.SDK_INT >= 30) {
+            settingsLauncher.launch(StoragePermission.settingsIntent(ctx))
+        } else {
+            legacyLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                )
+            )
+        }
     }
 
     val pkgs = remember(files, infos, query) {
@@ -130,6 +157,17 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
                 modifier = Modifier.padding(bottom = 8.dp),
             ) {
                 items(folders, key = { it.uri }) { f -> FolderChip(f) { vm.removeFolder(f) } }
+                if (folders.none { it.uri == StoragePermission.ALL_STORAGE_URI }) {
+                    item {
+                        AssistChip(
+                            onClick = scanAll,
+                            label = { Text("Todo o celular") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                        )
+                    }
+                }
             }
             OutlinedTextField(
                 value = query,
@@ -166,10 +204,17 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
             folders.isEmpty() -> EmptyState(
                 icon = Icons.Filled.VideogameAsset,
                 title = "Sua biblioteca está vazia",
-                text = "Selecione a pasta onde ficam seus arquivos PKG. O Android bloqueia a raiz do " +
-                    "armazenamento e a pasta Download inteira; escolha uma subpasta (ex.: Download/PKG).",
+                text = "Procure os PKG em todo o celular (inclusive na pasta Download) ou escolha uma pasta. " +
+                    "O seletor de pastas do Android bloqueia a pasta Download e a raiz do armazenamento; " +
+                    "para isso existe a busca em todo o celular, que pede a permissão \"Acesso a todos os arquivos\".",
                 action = {
-                    Button(onClick = { picker.launch(null) }) { Text("Escolher pasta") }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(onClick = scanAll) { Text("Buscar PKG em todo o celular") }
+                        FilledTonalButton(onClick = { picker.launch(null) }) { Text("Escolher uma pasta") }
+                    }
                 },
             )
 

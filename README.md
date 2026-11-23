@@ -4,7 +4,7 @@ Aplicativo Android (Kotlin + Jetpack Compose) para organizar PKG de PS4 e enviá
 
 ## O que ele faz
 
-- **Biblioteca**: escolhe pastas (Storage Access Framework, sem permissão ampla de armazenamento), acha arquivos `.pkg`, lê título, ID, versão e capa (`icon0.png`) direto do cabeçalho do PKG.
+- **Biblioteca**: escolhe pastas (Storage Access Framework) ou procura em **todo o celular**, acha arquivos `.pkg`, lê título, ID, versão e capa (`icon0.png`) direto do cabeçalho do PKG. O Android 11+ não deixa o seletor de pastas escolher a pasta Download nem a raiz do armazenamento (regra do sistema, vale para todos os apps); por isso a busca em todo o celular usa a permissão "Acesso a todos os arquivos" (`MANAGE_EXTERNAL_STORAGE`), que o usuário liga na tela de ajustes do Android. Com ela ativa, a Biblioteca e o Gerenciador mostram só os `.pkg`.
 - **Console**: cadastra PS4 por IP, escolhe o método de envio, testa a conexão e salva.
 - **Envios**: sobe um servidor HTTP no celular (com suporte a `HEAD` e `Range`) e pede ao PS4 para baixar o PKG dele. Mostra progresso real do que o PS4 já leu, velocidade, tempo restante e histórico.
 - **Arquivos**: pesquisa, filtra, ordena, move e exclui (com confirmação) os arquivos das pastas da biblioteca.

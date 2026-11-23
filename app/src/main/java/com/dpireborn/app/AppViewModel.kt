@@ -14,6 +14,7 @@ import com.dpireborn.app.data.PkgInfo
 import com.dpireborn.app.data.PkgParser
 import com.dpireborn.app.data.PsConsole
 import com.dpireborn.app.data.Store
+import com.dpireborn.app.data.StoragePermission
 import com.dpireborn.app.data.TestResult
 import com.dpireborn.app.net.Ps4Client
 import com.dpireborn.app.transfer.TransferManager
@@ -98,6 +99,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         rescan()
     }
 
+    /** Procurar PKG em todo o celular (exige "Acesso a todos os arquivos"). */
+    fun addAllStorage() {
+        if (!StoragePermission.hasAllFiles(ctx)) {
+            say("Permissão \"Acesso a todos os arquivos\" não concedida")
+            return
+        }
+        if (folders.value.any { it.uri == StoragePermission.ALL_STORAGE_URI }) {
+            rescan()
+            return
+        }
+        val list = folders.value + LibraryFolder(StoragePermission.ALL_STORAGE_URI, "Todo o celular")
+        folders.value = list
+        store.saveFolders(list)
+        rescan()
+    }
+
     fun removeFolder(folder: LibraryFolder) {
         try {
             ctx.contentResolver.releasePersistableUriPermission(
@@ -122,7 +139,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val all = ArrayList<FileItem>()
-                for (f in folders.value) all.addAll(FileScanner.scanTree(ctx, Uri.parse(f.uri)))
+                // Com "todo o celular" ativo e permitido, as outras pastas seriam só duplicatas dos mesmos arquivos.
+                val allStorage = folders.value.filter { it.uri == StoragePermission.ALL_STORAGE_URI }
+                val sources = if (allStorage.isNotEmpty() && StoragePermission.hasAllFiles(ctx)) allStorage else folders.value
+                for (f in sources) all.addAll(FileScanner.scanTree(ctx, Uri.parse(f.uri)))
                 files.value = all
 
                 val uris = HashSet<String>()

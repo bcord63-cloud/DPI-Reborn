@@ -5,6 +5,8 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import android.os.Environment
+import java.io.File
 
 /** Varredura de pastas escolhidas pelo Storage Access Framework (sem permissão ampla de armazenamento). */
 object FileScanner {
@@ -20,6 +22,7 @@ object FileScanner {
     )
 
     fun scanTree(ctx: Context, tree: Uri): List<FileItem> {
+        if (tree.scheme == "allfiles") return scanAllStorage(ctx)
         val out = ArrayList<FileItem>()
         val rootId = try {
             DocumentsContract.getTreeDocumentId(tree)
@@ -66,8 +69,67 @@ object FileScanner {
         for (d in dirs) walk(cr, tree, d, depth + 1, out)
     }
 
+    /**
+     * Procura arquivos .pkg em todo o armazenamento (interno e cartões SD) por caminho de arquivo.
+     * Exige "Acesso a todos os arquivos". Só devolve PKG, para não listar centenas de milhares de arquivos.
+     */
+    @Suppress("DEPRECATION")
+    fun scanAllStorage(ctx: Context): List<FileItem> {
+        val out = ArrayList<FileItem>()
+        if (!StoragePermission.hasAllFiles(ctx)) return out
+        val roots = ArrayList<File>()
+        roots.add(Environment.getExternalStorageDirectory())
+        try {
+            File("/storage").listFiles()?.forEach {
+                if (it.isDirectory && it.name != "emulated" && it.name != "self" && it.canRead()) roots.add(it)
+            }
+        } catch (e: Exception) {
+            // sem cartão SD ou volume ilegível
+        }
+        for (r in roots) walkFiles(r, 0, out)
+        return out
+    }
+
+    private fun walkFiles(dir: File, depth: Int, out: MutableList<FileItem>) {
+        if (depth > 12 || out.size >= MAX_FILES) return
+        val children = try {
+            dir.listFiles()
+        } catch (e: Exception) {
+            null
+        } ?: return
+        for (f in children) {
+            try {
+                if (f.isDirectory) {
+                    val n = f.name
+                    if (n.startsWith(".")) continue
+                    if (depth == 0 && n == "Android") continue // dados de apps: o Android não deixa ler
+                    walkFiles(f, depth + 1, out)
+                } else if (f.name.endsWith(".pkg", ignoreCase = true)) {
+                    out.add(
+                        FileItem(
+                            uri = Uri.fromFile(f).toString(),
+                            parentUri = Uri.fromFile(dir).toString(),
+                            rootUri = StoragePermission.ALL_STORAGE_URI,
+                            name = f.name,
+                            size = f.length(),
+                            modified = f.lastModified(),
+                            mime = "application/octet-stream",
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                // item ilegível: segue
+            }
+        }
+    }
+
     /** Procura uma subpasta com esse nome na raiz da árvore; cria se não existir. */
     fun findOrCreateDir(ctx: Context, tree: Uri, name: String): Uri? {
+        if (tree.scheme == "allfiles") {
+            @Suppress("DEPRECATION")
+            val d = File(Environment.getExternalStorageDirectory(), name)
+            return if (d.isDirectory || d.mkdirs()) Uri.fromFile(d) else null
+        }
         val cr = ctx.contentResolver
         val rootId = try {
             DocumentsContract.getTreeDocumentId(tree)
@@ -103,18 +165,29 @@ object FileScanner {
     }
 
     fun delete(ctx: Context, uri: Uri): Boolean = try {
-        DocumentsContract.deleteDocument(ctx.contentResolver, uri)
+        if (uri.scheme == "file") {
+            File(uri.path ?: "").delete()
+        } else {
+            DocumentsContract.deleteDocument(ctx.contentResolver, uri)
+        }
     } catch (e: Exception) {
         false
     }
 
     fun move(ctx: Context, item: FileItem, targetDir: Uri): Boolean = try {
-        DocumentsContract.moveDocument(
-            ctx.contentResolver,
-            Uri.parse(item.uri),
-            Uri.parse(item.parentUri),
-            targetDir,
-        ) != null
+        val src = Uri.parse(item.uri)
+        if (src.scheme == "file") {
+            val s = File(src.path ?: "")
+            val t = File(targetDir.path ?: "", s.name)
+            !t.exists() && s.renameTo(t)
+        } else {
+            DocumentsContract.moveDocument(
+                ctx.contentResolver,
+                src,
+                Uri.parse(item.parentUri),
+                targetDir,
+            ) != null
+        }
     } catch (e: Exception) {
         false
     }
