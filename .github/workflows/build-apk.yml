@@ -1,1 +1,76 @@
+name: Build DPI Reborn APK
 
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extrair dpi-reborn.zip (se existir)
+        run: |
+          if [ -f dpi-reborn.zip ]; then
+            unzip -o dpi-reborn.zip -d .
+            rm -f dpi-reborn.zip
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Adiciona projeto DPI Reborn" || true
+            git push || true
+          fi
+
+      - name: Verificar se o projeto existe
+        id: check
+        run: |
+          if [ -f settings.gradle.kts ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Projeto ainda não enviado (falta settings.gradle.kts)."
+          fi
+
+      - name: Configurar JDK 17
+        if: steps.check.outputs.found == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Gradle
+        if: steps.check.outputs.found == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Compilar APK Debug
+        if: steps.check.outputs.found == 'true'
+        run: gradle assembleDebug --stacktrace
+
+      - name: Renomear APK
+        if: steps.check.outputs.found == 'true'
+        run: cp app/build/outputs/apk/debug/app-debug.apk DPI-Reborn-debug.apk
+
+      - name: Publicar como artefato
+        if: steps.check.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPI-Reborn-debug-apk
+          path: DPI-Reborn-debug.apk
+
+      - name: Publicar em Releases
+        if: steps.check.outputs.found == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-debug
+          name: DPI Reborn (build de teste mais recente)
+          prerelease: true
+          files: DPI-Reborn-debug.apk
