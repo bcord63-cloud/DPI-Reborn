@@ -64,4 +64,38 @@ object Ps4Client {
 
     fun probeApi(ip: String, port: Int): HttpResult =
         postJson(ip, port, "/api/is_exists", "{\"title_id\":\"CUSA00000\"}", 5000)
+
+    private fun httpGet(url: String, timeoutMs: Int): String? {
+        return try {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "GET"
+                conn.connectTimeout = timeoutMs
+                conn.readTimeout = timeoutMs
+                val code = conn.responseCode
+                val stream = if (code >= 400) conn.errorStream else conn.inputStream
+                stream?.bufferedReader()?.use { it.readText() } ?: ""
+            } finally {
+                conn.disconnect()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Mesma checagem do DirectPackageInstaller: GET http://IP:9090/status devolve
+     * "status":"ready" quando o servidor de payloads do GoldHEN está ativo.
+     */
+    fun isGoldHenReady(ip: String): Boolean =
+        httpGet("http://$ip:9090/status", 1500)?.replace(" ", "")?.contains("\"status\":\"ready\"") == true
+
+    /** Mesma checagem do DPI: GET /api no Remote Package Installer responde "Unsupported method ... fail". */
+    fun isRpiOnline(ip: String, port: Int): Boolean {
+        val body = httpGet("http://$ip:$port/api", 1500) ?: return false
+        return body.contains("Unsupported method") && body.contains("fail")
+    }
+
+    /** O RPI considera sucesso quando a resposta contém "success" entre aspas (como o DPI verifica). */
+    fun isSuccess(body: String): Boolean = body.contains("\"success\"")
 }

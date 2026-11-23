@@ -24,7 +24,20 @@ data class PkgInfo(
     val iconPath: String? = null,
 )
 
-data class PsConsole(val id: String, val name: String, val ip: String, val port: Int)
+/** method: "auto", "rpi" (API do Remote Package Installer, porta 12800) ou "payload" (servidor de payloads do GoldHEN). */
+data class PsConsole(
+    val id: String,
+    val name: String,
+    val ip: String,
+    val port: Int,
+    val method: String = "auto",
+)
+
+fun methodLabel(method: String): String = when (method) {
+    "rpi" -> "API remota (RPI)"
+    "payload" -> "Payload GoldHEN"
+    else -> "Automático"
+}
 
 enum class TransferStatus { QUEUED, SENDING, DONE, FAILED, CANCELLED }
 

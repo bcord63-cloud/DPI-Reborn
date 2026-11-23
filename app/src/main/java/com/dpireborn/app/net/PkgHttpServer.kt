@@ -21,7 +21,10 @@ import java.util.concurrent.Executors
  * Suporta HEAD, GET, "Range: bytes=..." e várias conexões simultâneas (o instalador do PS4
  * faz HEAD e leitura parcial do cabeçalho antes do download completo).
  *
- * URL servida: http://IP_DO_CELULAR:PORTA/<id>/<nome-do-arquivo>.pkg
+ * Rotas:
+ *  - /<id>/<nome>.pkg                      o arquivo inteiro
+ *  - /<id>/<nome>.pkg?offset=N&size=M      só uma janela do arquivo (peças de PKG maiores que 4 GiB)
+ *  - /json/<id>.json                       manifesto JSON lido pelo payload do GoldHEN
  */
 class PkgHttpServer(
     private val resolver: ContentResolver,
@@ -31,7 +34,17 @@ class PkgHttpServer(
 
     private class Request(val method: String, val path: String, val headers: Map<String, String>)
 
+    /** O que será respondido: um trecho de arquivo (entry) ou bytes em memória (manifesto). */
+    private class Source(
+        val contentType: String,
+        val size: Long,
+        val base: Long,
+        val entry: Entry?,
+        val bytes: ByteArray?,
+    )
+
     private val entries = ConcurrentHashMap<String, Entry>()
+    private val manifests = ConcurrentHashMap<String, ByteArray>()
     private val pool = Executors.newCachedThreadPool()
 
     @Volatile
@@ -44,8 +57,13 @@ class PkgHttpServer(
         entries[entry.id] = entry
     }
 
+    fun registerManifest(id: String, json: String) {
+        manifests[id] = json.toByteArray(Charsets.UTF_8)
+    }
+
     fun unregister(id: String) {
         entries.remove(id)
+        manifests.remove(id)
     }
 
     /** Tenta a porta preferida; se estiver ocupada, usa qualquer porta livre. */
@@ -72,6 +90,7 @@ class PkgHttpServer(
         }
         server = null
         entries.clear()
+        manifests.clear()
         pool.shutdownNow()
     }
 
@@ -151,6 +170,35 @@ class PkgHttpServer(
         )
     }
 
+    private fun queryOf(raw: String): Map<String, String> {
+        val out = HashMap<String, String>()
+        if (raw.isEmpty()) return out
+        for (pair in raw.split('&')) {
+            val i = pair.indexOf('=')
+            if (i > 0) out[pair.substring(0, i)] = pair.substring(i + 1)
+        }
+        return out
+    }
+
+    private fun findSource(parts: List<String>, query: String): Source? {
+        if (parts.size >= 2 && parts[0] == "json") {
+            val key = parts[1].removeSuffix(".json")
+            val data = manifests[key] ?: return null
+            return Source("application/json", data.size.toLong(), 0L, null, data)
+        }
+        val e = entries[parts[0]] ?: return null
+        var offset = 0L
+        var size = e.size
+        val q = queryOf(query)
+        val o = q["offset"]?.toLongOrNull()
+        val s = q["size"]?.toLongOrNull()
+        if (o != null && s != null && o >= 0L && s > 0L && o + s <= e.size) {
+            offset = o
+            size = s
+        }
+        return Source("application/octet-stream", size, offset, e, null)
+    }
+
     /** Responde uma requisição. Retorna true se a conexão pode continuar aberta. */
     private fun respond(req: Request, out: OutputStream): Boolean {
         val keep = !req.headers["connection"].equals("close", ignoreCase = true)
@@ -159,19 +207,20 @@ class PkgHttpServer(
             return false
         }
         val rawPath = req.path.substringBefore('?')
+        val query = req.path.substringAfter('?', "")
         val path = try {
             URLDecoder.decode(rawPath, "UTF-8")
         } catch (e: Exception) {
             rawPath
         }
-        val id = path.trim('/').split('/').firstOrNull() ?: ""
-        val entry = entries[id]
-        if (entry == null) {
+        val parts = path.trim('/').split('/')
+        val source = findSource(parts, query)
+        if (source == null) {
             simple(out, 404, "Not Found", keep)
             return keep
         }
 
-        val size = entry.size
+        val size = source.size
         var start = 0L
         var end = size - 1
         var partial = false
@@ -206,7 +255,7 @@ class PkgHttpServer(
 
         val length = if (size <= 0L) 0L else end - start + 1
         val headers = ArrayList<Pair<String, String>>()
-        headers.add("Content-Type" to "application/octet-stream")
+        headers.add("Content-Type" to source.contentType)
         headers.add("Accept-Ranges" to "bytes")
         headers.add("Content-Length" to length.toString())
         if (partial) headers.add("Content-Range" to "bytes $start-$end/$size")
@@ -215,7 +264,13 @@ class PkgHttpServer(
 
         if (req.method == "GET" && length > 0) {
             out.flush()
-            streamFile(entry, start, length, out)
+            val bytes = source.bytes
+            if (bytes != null) {
+                out.write(bytes, start.toInt(), length.toInt())
+            } else {
+                val entry = source.entry ?: throw IOException("Fonte inválida")
+                streamFile(entry, source.base + start, length, out)
+            }
         }
         return keep
     }

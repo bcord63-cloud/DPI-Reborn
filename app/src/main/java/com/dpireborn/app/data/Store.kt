@@ -57,13 +57,22 @@ class Store(private val ctx: Context) {
     // ---------- Consoles ----------
     fun loadConsoles(): List<PsConsole> =
         readArray(consolesFile).objs {
-            PsConsole(it.getString("id"), it.optString("name", "PS4"), it.getString("ip"), it.optInt("port", 12800))
+            PsConsole(
+                it.getString("id"),
+                it.optString("name", "PS4"),
+                it.getString("ip"),
+                it.optInt("port", 12800),
+                it.optString("method", "auto"),
+            )
         }
 
     fun saveConsoles(list: List<PsConsole>) {
         val arr = JSONArray()
         list.forEach {
-            arr.put(JSONObject().put("id", it.id).put("name", it.name).put("ip", it.ip).put("port", it.port))
+            arr.put(
+                JSONObject().put("id", it.id).put("name", it.name).put("ip", it.ip)
+                    .put("port", it.port).put("method", it.method)
+            )
         }
         writeText(consolesFile, arr.toString())
     }

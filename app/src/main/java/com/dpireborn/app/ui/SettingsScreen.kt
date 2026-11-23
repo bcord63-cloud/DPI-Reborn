@@ -220,8 +220,9 @@ fun SettingsScreen(vm: AppViewModel) {
             }
             Text(
                 text = "O DPI Reborn é um instalador de pacotes por rede local para uso com arquivos que você " +
-                    "possui. Ele não baixa nem distribui jogos. O envio depende de um app instalador remoto " +
-                    "(Remote Package Installer / DPI v2) rodando no seu PS4.",
+                    "possui. Ele não baixa nem distribui jogos. O envio usa a API do Remote Package Installer " +
+                    "(app aberto no PS4) ou o payload do DirectPackageInstaller via servidor de payloads do " +
+                    "GoldHEN. O payload embutido é do projeto DirectPackageInstaller (GPL-3.0), de marcussacana.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),

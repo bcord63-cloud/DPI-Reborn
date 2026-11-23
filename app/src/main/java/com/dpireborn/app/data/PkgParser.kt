@@ -37,6 +37,24 @@ object PkgParser {
         }
     }
 
+    private const val ZERO_DIGEST = "0000000000000000000000000000000000000000000000000000000000000000"
+
+    /**
+     * Digest do cabeçalho (32 bytes em 0xFE0, "pkg_digest" na documentação do formato), em hexadecimal
+     * maiúsculo. É o valor que o DPI coloca em "packageDigest" no manifesto JSON.
+     */
+    fun readHeaderDigest(ctx: Context, uri: Uri): String {
+        return try {
+            val pfd = ctx.contentResolver.openFileDescriptor(uri, "r") ?: return ZERO_DIGEST
+            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+                val d = readAt(input.channel, 0xFE0L, 32)
+                d?.joinToString("") { "%02X".format(it) } ?: ZERO_DIGEST
+            }
+        } catch (e: Exception) {
+            ZERO_DIGEST
+        }
+    }
+
     private fun parseChannel(ch: FileChannel, iconDir: File, iconName: String): PkgInfo {
         val head = readAt(ch, 0L, 0x80) ?: return PkgInfo(recognized = false)
         val hb = ByteBuffer.wrap(head).order(ByteOrder.BIG_ENDIAN)

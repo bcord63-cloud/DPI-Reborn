@@ -3,6 +3,7 @@
 package com.dpireborn.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -61,6 +64,7 @@ fun ConsoleScreen(vm: AppViewModel) {
     var name by rememberSaveable { mutableStateOf("PS4") }
     var ip by rememberSaveable { mutableStateOf("") }
     var port by rememberSaveable { mutableStateOf("12800") }
+    var method by rememberSaveable { mutableStateOf("auto") }
     var error by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<PsConsole?>(null) }
     val phoneIp = remember { NetUtil.localIpv4() }
@@ -121,6 +125,13 @@ fun ConsoleScreen(vm: AppViewModel) {
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Text(
+                    text = "Método de envio",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+                MethodChips(selected = method, onSelect = { method = it })
                 if (error != null) {
                     Text(
                         text = error ?: "",
@@ -131,7 +142,7 @@ fun ConsoleScreen(vm: AppViewModel) {
                 }
                 Button(
                     onClick = {
-                        val err = vm.saveConsole(name, ip, port.toIntOrNull() ?: 0)
+                        val err = vm.saveConsole(name, ip, port.toIntOrNull() ?: 0, method)
                         error = err
                         if (err == null) ip = ""
                     },
@@ -164,6 +175,7 @@ fun ConsoleScreen(vm: AppViewModel) {
                     onSelect = { vm.selectConsole(c.id) },
                     onTest = { vm.testConsole(c) },
                     onDelete = { deleting = c },
+                    onMethod = { vm.setConsoleMethod(c, it) },
                 )
             }
         }
@@ -172,10 +184,14 @@ fun ConsoleScreen(vm: AppViewModel) {
             SectionCard {
                 Text("Como funciona", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = "O DPI Reborn não instala nada sozinho: ele serve o arquivo PKG pela sua rede " +
-                        "e pede ao PS4 que o baixe, usando a API do instalador remoto (Remote Package Installer / " +
-                        "DPI v2) na porta 12800. Por isso o PS4 precisa estar com o homebrew habilitado e o app " +
-                        "instalador aberto na tela. Sem esse app no console, o envio não tem como funcionar.",
+                    text = "O DPI Reborn serve o arquivo PKG pelo seu Wi-Fi e pede ao PS4 que o baixe. Há dois " +
+                        "jeitos, os mesmos do DirectPackageInstaller:\n\n" +
+                        "• API remota (RPI): precisa do app Remote Package Installer aberto na tela do PS4 " +
+                        "(porta 12800).\n\n" +
+                        "• Payload GoldHEN: não precisa de app. Com o servidor de payloads do GoldHEN ativo " +
+                        "(porta 9090), o celular envia um payload ao PS4 que registra o download.\n\n" +
+                        "No modo Automático, o app usa a API remota se ela responder e, se não, o payload. " +
+                        "Use \"Testar conexão\" para ver o que está disponível.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     modifier = Modifier.padding(top = 8.dp),
@@ -203,6 +219,24 @@ fun ConsoleScreen(vm: AppViewModel) {
 }
 
 @Composable
+private fun MethodChips(selected: String, onSelect: (String) -> Unit) {
+    val options = listOf("auto" to "Auto", "rpi" to "RPI", "payload" to "GoldHEN")
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for ((key, label) in options) {
+            FilterChip(
+                selected = selected == key,
+                onClick = { onSelect(key) },
+                label = { Text(label, maxLines = 1) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onBackground,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ConsoleCard(
     console: PsConsole,
     selected: Boolean,
@@ -211,6 +245,7 @@ private fun ConsoleCard(
     onSelect: () -> Unit,
     onTest: () -> Unit,
     onDelete: () -> Unit,
+    onMethod: (String) -> Unit,
 ) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,6 +268,9 @@ private fun ConsoleCard(
                     color = TextSecondary,
                 )
             }
+        }
+        Box(modifier = Modifier.padding(top = 4.dp)) {
+            MethodChips(selected = console.method, onSelect = onMethod)
         }
         Row(
             modifier = Modifier

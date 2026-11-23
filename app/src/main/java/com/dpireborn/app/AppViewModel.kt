@@ -166,7 +166,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- Consoles ----------------
 
     /** Retorna uma mensagem de erro, ou null se salvou. */
-    fun saveConsole(name: String, ip: String, port: Int): String? {
+    fun saveConsole(name: String, ip: String, port: Int, method: String): String? {
         val cleanIp = ip.trim()
         val ipOk = Regex("^(\\d{1,3}\\.){3}\\d{1,3}$").matches(cleanIp) &&
             cleanIp.split('.').all { it.toInt() in 0..255 }
@@ -177,6 +177,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             name = name.trim().ifBlank { "PS4" },
             ip = cleanIp,
             port = port,
+            method = method,
         )
         val list = consoles.value + c
         consoles.value = list
@@ -198,6 +199,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.setSelectedConsole(id)
     }
 
+    fun setConsoleMethod(c: PsConsole, method: String) {
+        val list = consoles.value.map { if (it.id == c.id) it.copy(method = method) else it }
+        consoles.value = list
+        store.saveConsoles(list)
+    }
+
     fun testConsole(c: PsConsole) {
         if (c.id in testing.value) return
         testing.update { it + c.id }
@@ -205,30 +212,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val lines = ArrayList<String>()
             var ok = false
             try {
-                val api = Ps4Client.checkPort(c.ip, c.port)
-                if (api.open) {
-                    ok = true
-                    lines.add("Porta ${c.port} aberta (${api.ms} ms): o serviço de instalação remota está alcançável.")
-                    try {
-                        val r = Ps4Client.probeApi(c.ip, c.port)
-                        lines.add("A API HTTP respondeu (código ${r.code}).")
-                    } catch (e: Exception) {
-                        lines.add(
-                            "A porta abre, mas a API HTTP não respondeu. Deixe o app instalador " +
-                                "(Remote Package Installer / DPI) aberto na tela do PS4."
-                        )
-                    }
+                // Mesmas checagens que o DirectPackageInstaller usa para escolher o método.
+                val rpi = Ps4Client.isRpiOnline(c.ip, c.port)
+                val goldHen = Ps4Client.isGoldHenReady(c.ip)
+                ok = rpi || goldHen
+
+                if (rpi) {
+                    lines.add("Remote Package Installer detectado na porta ${c.port}: método API remota disponível.")
                 } else {
+                    val api = Ps4Client.checkPort(c.ip, c.port)
                     lines.add(
-                        "Porta ${c.port} fechada ou sem resposta. Confira o IP, se celular e PS4 estão " +
-                            "na mesma rede e se o app instalador está aberto no PS4."
+                        if (api.open) {
+                            "A porta ${c.port} abre, mas não reconheci o Remote Package Installer. Deixe o app aberto na tela do PS4."
+                        } else {
+                            "Remote Package Installer não detectado na porta ${c.port} (normal se o app não estiver aberto no PS4)."
+                        }
                     )
                 }
-                val gh = Ps4Client.checkPort(c.ip, 9090, 1500)
-                lines.add(
-                    if (gh.open) "Porta 9090 aberta (servidor de payloads do GoldHEN)."
-                    else "Porta 9090 fechada (normal se o servidor de payloads não estiver ativo)."
-                )
+                if (goldHen) {
+                    lines.add("Servidor de payloads do GoldHEN pronto (porta 9090): método payload disponível, sem precisar do app.")
+                } else {
+                    lines.add(
+                        "Servidor de payloads do GoldHEN não respondeu em 9090 (ative-o nas configurações do GoldHEN, " +
+                            "se quiser o método payload)."
+                    )
+                }
+                if (!ok) {
+                    lines.add("Nenhum método disponível agora. Confira o IP e se celular e PS4 estão na mesma rede.")
+                } else if (c.method == "auto") {
+                    lines.add("Modo automático: " + (if (rpi) "vai usar a API remota (RPI)." else "vai usar o payload do GoldHEN."))
+                }
             } catch (e: Exception) {
                 lines.add("Erro no teste: ${e.message}")
             }
@@ -250,7 +263,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             say("Nenhum arquivo PKG selecionado")
             return
         }
-        TransferManager.enqueue(ctx, pkgs, c, serverPort.value)
+        TransferManager.enqueue(ctx, pkgs, c, serverPort.value, pkgInfo.value)
         say("Envio iniciado: acompanhe na aba Envios")
     }
 
