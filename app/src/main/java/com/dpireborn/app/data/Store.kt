@@ -14,6 +14,7 @@ class Store(private val ctx: Context) {
     private val foldersFile = File(ctx.filesDir, "folders.json")
     private val consolesFile = File(ctx.filesDir, "consoles.json")
     private val historyFile = File(ctx.filesDir, "history.json")
+    private val importedFile = File(ctx.filesDir, "imported.json")
     private val pkgCacheFile = File(ctx.cacheDir, "pkg_cache.json")
 
     private fun readArray(f: File): JSONArray = try {
@@ -52,6 +53,20 @@ class Store(private val ctx: Context) {
         val arr = JSONArray()
         list.forEach { arr.put(JSONObject().put("uri", it.uri).put("name", it.name)) }
         writeText(foldersFile, arr.toString())
+    }
+
+    // ---------- PKG importados individualmente ----------
+    fun loadImported(): List<String> {
+        val a = readArray(importedFile)
+        val out = ArrayList<String>()
+        for (i in 0 until a.length()) a.optString(i).takeIf { it.isNotBlank() }?.let { out.add(it) }
+        return out
+    }
+
+    fun saveImported(list: List<String>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it) }
+        writeText(importedFile, arr.toString())
     }
 
     // ---------- Consoles ----------

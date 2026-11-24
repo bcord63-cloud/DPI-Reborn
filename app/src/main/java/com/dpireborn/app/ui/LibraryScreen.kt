@@ -147,7 +147,7 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
             }
             FilledTonalButton(onClick = { picker.launch(null) }) {
                 Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("  Pasta")
+                Text("  Selecionar pasta")
             }
         }
 

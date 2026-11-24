@@ -39,6 +39,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val pkgInfo = MutableStateFlow<Map<String, PkgInfo>>(emptyMap())
     val scanning = MutableStateFlow(false)
     val selection = MutableStateFlow<Set<String>>(emptySet())
+    val imported = MutableStateFlow(store.loadImported())
+    /** Problemas por pasta (chave = uri da pasta): permissão revogada, pasta indisponível. */
+    val folderProblems = MutableStateFlow<Map<String, String>>(emptyMap())
 
     // Consoles
     val consoles = MutableStateFlow(store.loadConsoles())
@@ -115,6 +118,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         rescan()
     }
 
+    /** Importa um único PKG (OpenDocument): confere extensão e assinatura do cabeçalho antes de aceitar. */
+    fun importPkg(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                try {
+                    ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) {
+                    // alguns provedores não permitem permissão persistente; vale só até reiniciar
+                }
+                val item = FileScanner.statSingle(ctx, uri)
+                if (item == null) {
+                    say("Falha ao importar: não foi possível acessar o arquivo")
+                    return@launch
+                }
+                if (!item.isPkg) {
+                    say("Arquivo inválido: escolha um arquivo .pkg")
+                    return@launch
+                }
+                val magic = ByteArray(4)
+                val n = ctx.contentResolver.openInputStream(uri)?.use { it.read(magic) } ?: -1
+                if (n < 4 || magic[0] != 0x7F.toByte() || magic[1] != 0x43.toByte() ||
+                    magic[2] != 0x4E.toByte() || magic[3] != 0x54.toByte()
+                ) {
+                    say("Arquivo inválido: o cabeçalho não é de um PKG de PS4")
+                    return@launch
+                }
+                if (imported.value.contains(uri.toString())) {
+                    say("Este PKG já foi importado")
+                    return@launch
+                }
+                val list = imported.value + uri.toString()
+                imported.value = list
+                store.saveImported(list)
+                say("PKG importado: ${item.name}")
+                rescan()
+            } catch (e: Exception) {
+                say("Falha ao importar: ${e.message ?: "erro de leitura"}")
+            }
+        }
+    }
+
+    /** Envia ao PS4 um PKG baixado pelo catálogo, reaproveitando o mesmo mecanismo de envio. */
+    fun sendDownloaded(path: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val f = File(path)
+            if (!f.isFile) {
+                say("Arquivo não encontrado: ele foi movido ou apagado")
+                return@launch
+            }
+            val uri = Uri.fromFile(f)
+            val item = FileScanner.statSingle(ctx, uri)
+            if (item == null || !item.isPkg) {
+                say("Só arquivos .pkg podem ser enviados ao PS4")
+                return@launch
+            }
+            val iconDir = File(ctx.cacheDir, "icons")
+            iconDir.mkdirs()
+            val info = PkgParser.parse(ctx, uri, iconDir, sha1("${item.uri}|${item.size}|${item.modified}"))
+            pkgInfo.update { it + (item.uri to info) }
+            sendFiles(listOf(item))
+        }
+    }
+
     fun removeFolder(folder: LibraryFolder) {
         try {
             ctx.contentResolver.releasePersistableUriPermission(
@@ -142,7 +208,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // Com "todo o celular" ativo e permitido, as outras pastas seriam só duplicatas dos mesmos arquivos.
                 val allStorage = folders.value.filter { it.uri == StoragePermission.ALL_STORAGE_URI }
                 val sources = if (allStorage.isNotEmpty() && StoragePermission.hasAllFiles(ctx)) allStorage else folders.value
-                for (f in sources) all.addAll(FileScanner.scanTree(ctx, Uri.parse(f.uri)))
+                val problems = HashMap<String, String>()
+                for (f in sources) {
+                    val problem = FileScanner.checkFolder(ctx, Uri.parse(f.uri))
+                    if (problem != null) {
+                        problems[f.uri] = "${f.name}: $problem"
+                        continue
+                    }
+                    all.addAll(FileScanner.scanTree(ctx, Uri.parse(f.uri)))
+                }
+                folderProblems.value = problems
+                // PKG importados um a um: se o arquivo sumiu ou perdeu a permissão, sai da lista e avisa.
+                val stillThere = ArrayList<String>()
+                for (u in imported.value) {
+                    val it = FileScanner.statSingle(ctx, Uri.parse(u))
+                    if (it == null) {
+                        say("Arquivo importado não está mais disponível e foi removido da lista")
+                    } else {
+                        stillThere.add(u)
+                        if (all.none { x -> x.uri == it.uri }) all.add(it)
+                    }
+                }
+                if (stillThere.size != imported.value.size) {
+                    imported.value = stillThere
+                    store.saveImported(stillThere)
+                }
                 files.value = all
 
                 val uris = HashSet<String>()

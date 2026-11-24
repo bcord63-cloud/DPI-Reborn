@@ -211,6 +211,20 @@ fun SettingsScreen(vm: AppViewModel) {
         }
 
         SectionCard {
+            Text("Catálogo de apps e privacidade", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "A aba Apps consulta o catálogo no repositório do DPI Reborn e confere cada fonte (API de releases do GitHub " +
+                    "e páginas oficiais) por HTTPS, no máximo a cada 6 horas ou quando você toca em atualizar. " +
+                    "Nenhum dado pessoal é enviado. Downloads só começam quando você toca em Baixar, usam o gerenciador " +
+                    "de downloads do Android e nunca são abertos ou instalados automaticamente. Quando a fonte publica " +
+                    "o SHA-256, o app confere o arquivo; se não confere, ele é apagado.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        SectionCard {
             Text("Sobre", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 InfoLine("Aplicativo", "DPI Reborn $versionName")

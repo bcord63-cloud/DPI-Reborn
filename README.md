@@ -4,6 +4,15 @@ Aplicativo Android (Kotlin + Jetpack Compose) para organizar PKG de PS4 e enviá
 
 ## O que ele faz
 
+## Navegação (4 abas)
+
+- **Início**: painel com o aviso de novidade (versão iOS "em breve"), console selecionado, atalhos, favoritos e vistos recentemente. As telas **Console** e **Envios** continuam aqui, nas abas internas do Início.
+- **Arquivos**: **PKGs** (Biblioteca abaixo), **Importar PKG** (um arquivo avulso, com checagem do cabeçalho), **Selecionar pasta**, **Atualizar** e o **Gerenciador**. Mostra avisos de permissão revogada ou pasta indisponível.
+- **Apps**: catálogo por categorias com busca, filtros (PS4, Android, Emuladores, Homebrew, Ferramentas, Streaming, Outros, Favoritos), ordenação, detalhes, downloads reais e histórico. Veja `docs/CATALOGO.md`.
+- **Configurações**: ajustes, armazenamento, privacidade do catálogo e informações do app.
+
+## Telas de antes
+
 - **Biblioteca**: escolhe pastas (Storage Access Framework) ou procura em **todo o celular**, acha arquivos `.pkg`, lê título, ID, versão e capa (`icon0.png`) direto do cabeçalho do PKG. O Android 11+ não deixa o seletor de pastas escolher a pasta Download nem a raiz do armazenamento (regra do sistema, vale para todos os apps); por isso a busca em todo o celular usa a permissão "Acesso a todos os arquivos" (`MANAGE_EXTERNAL_STORAGE`), que o usuário liga na tela de ajustes do Android. Com ela ativa, a Biblioteca e o Gerenciador mostram só os `.pkg`.
 - **Console**: cadastra PS4 por IP, escolhe o método de envio, testa a conexão e salva.
 - **Envios**: sobe um servidor HTTP no celular (com suporte a `HEAD` e `Range`) e pede ao PS4 para baixar o PKG dele. Mostra progresso real do que o PS4 já leu, velocidade, tempo restante e histórico.
@@ -40,6 +49,10 @@ Erros do payload aparecem como notificação "DPI: ..." na tela do PS4.
 - O `packageDigest` do manifesto vem dos 32 bytes em `0xFE0` do cabeçalho do PKG (campo `pkg_digest` na documentação do formato). Isso foi deduzido; o DirectPackageInstaller usa o `HeaderDigest` da biblioteca LibOrbisPkg.
 - O `dpi_payload.bin` é o binário que acompanha o código do DirectPackageInstaller. O código C dele (`Payload/main.c`, `Payload/info.c`) foi lido e os textos do binário conferem, mas o código de máquina não foi auditado.
 - O app não baixa jogos, e o envio só funciona com PKG que você já tem.
+
+## Catálogo e downloads
+
+O catálogo é um `catalog.json` atualizável sem lançar novo APK, e cada fonte é verificada ao vivo (GitHub Releases ou página oficial). Detalhes, formato e o que não foi verificado: `docs/CATALOGO.md`. Preparo para iOS: `docs/IOS.md`.
 
 ## Licença
 

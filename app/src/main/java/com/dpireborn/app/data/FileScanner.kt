@@ -191,4 +191,55 @@ object FileScanner {
     } catch (e: Exception) {
         false
     }
+
+    /** Lê nome, tamanho e data de um único documento (arquivo importado). Null se removido ou sem permissão. */
+    fun statSingle(ctx: Context, uri: Uri): FileItem? {
+        if (uri.scheme == "file") {
+            val f = File(uri.path ?: return null)
+            if (!f.isFile) return null
+            return FileItem(uri.toString(), uri.toString(), "imported", f.name, f.length(), f.lastModified(), "application/octet-stream")
+        }
+        return try {
+            ctx.contentResolver.query(
+                uri,
+                arrayOf(Document.COLUMN_DISPLAY_NAME, Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED),
+                null, null, null,
+            )?.use { c ->
+                if (!c.moveToFirst()) {
+                    null
+                } else {
+                    FileItem(
+                        uri = uri.toString(),
+                        parentUri = uri.toString(),
+                        rootUri = "imported",
+                        name = c.getString(0) ?: "arquivo.pkg",
+                        size = if (c.isNull(1)) 0L else c.getLong(1),
+                        modified = if (c.isNull(2)) 0L else c.getLong(2),
+                        mime = "application/octet-stream",
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Devolve uma mensagem de problema para a pasta (permissão revogada, pasta indisponível) ou null se está tudo certo. */
+    fun checkFolder(ctx: Context, tree: Uri): String? {
+        if (tree.scheme == "allfiles") {
+            return if (StoragePermission.hasAllFiles(ctx)) null else "Acesso a todos os arquivos foi desativado nos ajustes do Android"
+        }
+        val granted = ctx.contentResolver.persistedUriPermissions.any { it.uri == tree && it.isReadPermission }
+        if (!granted) return "Permissão revogada: selecione a pasta novamente"
+        return try {
+            val id = DocumentsContract.getTreeDocumentId(tree)
+            val c = ctx.contentResolver.query(
+                DocumentsContract.buildChildDocumentsUriUsingTree(tree, id),
+                arrayOf(Document.COLUMN_DOCUMENT_ID), null, null, null,
+            )
+            if (c == null) "Pasta indisponível (o provedor não respondeu)" else { c.close(); null }
+        } catch (e: Exception) {
+            "Pasta indisponível ou removida"
+        }
+    }
 }

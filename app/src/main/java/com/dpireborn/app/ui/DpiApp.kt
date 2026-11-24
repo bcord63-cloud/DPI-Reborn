@@ -6,11 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -27,12 +26,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dpireborn.app.AppViewModel
+import com.dpireborn.app.catalog.CatalogViewModel
 import com.dpireborn.app.ui.theme.BgBlack
 import com.dpireborn.app.ui.theme.DpiTheme
 import com.dpireborn.app.ui.theme.SurfaceDark
@@ -42,25 +44,30 @@ import com.dpireborn.app.ui.theme.accentColor
 private data class NavTab(val label: String, val icon: ImageVector)
 
 private val navTabs = listOf(
-    NavTab("Biblioteca", Icons.Filled.VideogameAsset),
-    NavTab("Console", Icons.Filled.SportsEsports),
-    NavTab("Envios", Icons.Filled.CloudUpload),
+    NavTab("Início", Icons.Filled.Home),
     NavTab("Arquivos", Icons.Filled.FolderOpen),
-    NavTab("Ajustes", Icons.Filled.Settings),
+    NavTab("Apps", Icons.Filled.Apps),
+    NavTab("Configurações", Icons.Filled.Settings),
 )
 
 @Composable
 fun DpiApp(vm: AppViewModel) {
+    val cvm: CatalogViewModel = viewModel()
     val accentKey by vm.accent.collectAsStateWithLifecycle()
     val active by vm.active.collectAsStateWithLifecycle()
     val accent = accentColor(accentKey)
 
     DpiTheme(accent = accent) {
         var tab by rememberSaveable { mutableIntStateOf(0) }
+        var homeSub by rememberSaveable { mutableIntStateOf(0) }
+        val holder = rememberSaveableStateHolder()
         val snackbar = remember { SnackbarHostState() }
 
         LaunchedEffect(Unit) {
             vm.messages.collect { snackbar.showSnackbar(it) }
+        }
+        LaunchedEffect(Unit) {
+            cvm.messages.collect { snackbar.showSnackbar(it) }
         }
 
         Scaffold(
@@ -73,7 +80,7 @@ fun DpiApp(vm: AppViewModel) {
                             selected = tab == index,
                             onClick = { tab = index },
                             icon = {
-                                if (index == 2 && active.isNotEmpty()) {
+                                if (index == 0 && active.isNotEmpty()) {
                                     BadgedBox(badge = { Badge { Text(active.size.toString()) } }) {
                                         Icon(t.icon, contentDescription = t.label)
                                     }
@@ -100,12 +107,13 @@ fun DpiApp(vm: AppViewModel) {
                     .fillMaxSize()
             ) {
                 Crossfade(targetState = tab, animationSpec = tween(180), label = "tabs") { current ->
-                    when (current) {
-                        0 -> LibraryScreen(vm) { tab = 2 }
-                        1 -> ConsoleScreen(vm)
-                        2 -> TransfersScreen(vm)
-                        3 -> ManagerScreen(vm) { tab = 2 }
-                        else -> SettingsScreen(vm)
+                    holder.SaveableStateProvider(current) {
+                        when (current) {
+                            0 -> HomeScreen(vm, cvm, homeSub, { homeSub = it }, { tab = 2 }, { tab = 1 })
+                            1 -> FilesHubScreen(vm) { homeSub = 2; tab = 0 }
+                            2 -> AppsScreen(cvm, vm)
+                            else -> SettingsScreen(vm)
+                        }
                     }
                 }
             }
