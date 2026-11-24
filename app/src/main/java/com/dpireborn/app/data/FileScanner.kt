@@ -23,6 +23,11 @@ object FileScanner {
 
     fun scanTree(ctx: Context, tree: Uri): List<FileItem> {
         if (tree.scheme == "allfiles") return scanAllStorage(ctx)
+        if (tree.scheme == "file") {
+            val res = ArrayList<FileItem>()
+            if (StoragePermission.hasAllFiles(ctx)) walkFiles(File(tree.path ?: ""), 0, res, tree.toString())
+            return res
+        }
         val out = ArrayList<FileItem>()
         val rootId = try {
             DocumentsContract.getTreeDocumentId(tree)
@@ -90,7 +95,7 @@ object FileScanner {
         return out
     }
 
-    private fun walkFiles(dir: File, depth: Int, out: MutableList<FileItem>) {
+    private fun walkFiles(dir: File, depth: Int, out: MutableList<FileItem>, rootUri: String = StoragePermission.ALL_STORAGE_URI) {
         if (depth > 12 || out.size >= MAX_FILES) return
         val children = try {
             dir.listFiles()
@@ -103,13 +108,13 @@ object FileScanner {
                     val n = f.name
                     if (n.startsWith(".")) continue
                     if (depth == 0 && n == "Android") continue // dados de apps: o Android não deixa ler
-                    walkFiles(f, depth + 1, out)
+                    walkFiles(f, depth + 1, out, rootUri)
                 } else if (f.name.endsWith(".pkg", ignoreCase = true)) {
                     out.add(
                         FileItem(
                             uri = Uri.fromFile(f).toString(),
                             parentUri = Uri.fromFile(dir).toString(),
-                            rootUri = StoragePermission.ALL_STORAGE_URI,
+                            rootUri = rootUri,
                             name = f.name,
                             size = f.length(),
                             modified = f.lastModified(),
@@ -125,6 +130,10 @@ object FileScanner {
 
     /** Procura uma subpasta com esse nome na raiz da árvore; cria se não existir. */
     fun findOrCreateDir(ctx: Context, tree: Uri, name: String): Uri? {
+        if (tree.scheme == "file") {
+            val d = File(tree.path ?: return null, name)
+            return if (d.isDirectory || d.mkdirs()) Uri.fromFile(d) else null
+        }
         if (tree.scheme == "allfiles") {
             @Suppress("DEPRECATION")
             val d = File(Environment.getExternalStorageDirectory(), name)
@@ -226,6 +235,11 @@ object FileScanner {
 
     /** Devolve uma mensagem de problema para a pasta (permissão revogada, pasta indisponível) ou null se está tudo certo. */
     fun checkFolder(ctx: Context, tree: Uri): String? {
+        if (tree.scheme == "file") {
+            if (!StoragePermission.hasAllFiles(ctx)) return "Acesso a todos os arquivos foi desativado nos ajustes do Android"
+            val d = File(tree.path ?: "")
+            return if (d.isDirectory && d.canRead()) null else "Pasta indisponível ou removida"
+        }
         if (tree.scheme == "allfiles") {
             return if (StoragePermission.hasAllFiles(ctx)) null else "Acesso a todos os arquivos foi desativado nos ajustes do Android"
         }

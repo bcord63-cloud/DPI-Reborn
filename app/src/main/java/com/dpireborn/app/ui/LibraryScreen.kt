@@ -91,9 +91,7 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var detail by remember { mutableStateOf<FileItem?>(null) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) vm.addFolder(uri)
-    }
+    val openPicker = { vm.showPicker.value = true }
 
     // "Todo o celular": o Android 11+ bloqueia a pasta Download no seletor de pastas, então usamos
     // a permissão "Acesso a todos os arquivos" (o usuário liga na tela de ajustes do Android).
@@ -145,7 +143,7 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
             IconButton(onClick = { vm.rescan() }) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Atualizar", tint = MaterialTheme.colorScheme.primary)
             }
-            FilledTonalButton(onClick = { picker.launch(null) }) {
+            FilledTonalButton(onClick = { openPicker() }) {
                 Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text("  Selecionar pasta")
             }
@@ -213,7 +211,7 @@ fun LibraryScreen(vm: AppViewModel, onGoTransfers: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Button(onClick = scanAll) { Text("Buscar PKG em todo o celular") }
-                        FilledTonalButton(onClick = { picker.launch(null) }) { Text("Escolher uma pasta") }
+                        FilledTonalButton(onClick = { openPicker() }) { Text("Escolher uma pasta") }
                     }
                 },
             )

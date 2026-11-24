@@ -40,6 +40,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val scanning = MutableStateFlow(false)
     val selection = MutableStateFlow<Set<String>>(emptySet())
     val imported = MutableStateFlow(store.loadImported())
+    /** Seletor de pastas do próprio app (sem o seletor do Android). */
+    val showPicker = MutableStateFlow(false)
     /** Problemas por pasta (chave = uri da pasta): permissão revogada, pasta indisponível. */
     val folderProblems = MutableStateFlow<Map<String, String>>(emptyMap())
 
@@ -113,6 +115,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val list = folders.value + LibraryFolder(StoragePermission.ALL_STORAGE_URI, "Todo o celular")
+        folders.value = list
+        store.saveFolders(list)
+        rescan()
+    }
+
+    /** Adiciona uma pasta escolhida no seletor do app (caminho de arquivo, exige acesso a todos os arquivos). */
+    fun addLocalFolder(dir: File) {
+        val uri = Uri.fromFile(dir).toString()
+        if (folders.value.any { it.uri == uri }) {
+            say("Esta pasta já foi adicionada")
+            return
+        }
+        val list = folders.value + LibraryFolder(uri, dir.name.ifBlank { "Armazenamento" })
         folders.value = list
         store.saveFolders(list)
         rescan()

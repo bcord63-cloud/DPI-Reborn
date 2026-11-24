@@ -4,12 +4,13 @@ Aplicativo Android (Kotlin + Jetpack Compose) para organizar PKG de PS4 e enviá
 
 ## O que ele faz
 
-## Navegação (4 abas)
+## Navegação (3 abas)
 
-- **Início**: painel com o aviso de novidade (versão iOS "em breve"), console selecionado, atalhos, favoritos e vistos recentemente. As telas **Console** e **Envios** continuam aqui, nas abas internas do Início.
-- **Arquivos**: **PKGs** (Biblioteca abaixo), **Importar PKG** (um arquivo avulso, com checagem do cabeçalho), **Selecionar pasta**, **Atualizar** e o **Gerenciador**. Mostra avisos de permissão revogada ou pasta indisponível.
-- **Apps**: catálogo por categorias com busca, filtros (PS4, Android, Emuladores, Homebrew, Ferramentas, Streaming, Outros, Favoritos), ordenação, detalhes, downloads reais e histórico. Veja `docs/CATALOGO.md`.
-- **Configurações**: ajustes, armazenamento, privacidade do catálogo e informações do app.
+- **Início**: lista de **PKGs** (capa, título, ID, versão) com envio ao PS4, mais as abas internas **Console** e **Envios**. Mostra o aviso de novidade da versão iOS ("em breve").
+- **Arquivos**: **Selecionar pasta**, **Importar PKG**, **Atualizar** e o gerenciador (mover/excluir). Mostra avisos de permissão revogada ou pasta indisponível.
+- **Configurações**: ajustes, armazenamento e informações do app.
+
+**Seletor de pastas próprio**: em vez do seletor do Android (que bloqueia Download), o app tem o seu, no estilo do DirectPackageInstaller: navega pelos caminhos reais do armazenamento interno e do cartão SD, com atalhos para Download, Documents e DCIM. "Usar esta pasta" adiciona à biblioteca; tocar num `.pkg` importa só aquele arquivo. Exige a permissão "Acesso a todos os arquivos" (o app leva você à tela certa do Android).
 
 ## Telas de antes
 
@@ -50,9 +51,7 @@ Erros do payload aparecem como notificação "DPI: ..." na tela do PS4.
 - O `dpi_payload.bin` é o binário que acompanha o código do DirectPackageInstaller. O código C dele (`Payload/main.c`, `Payload/info.c`) foi lido e os textos do binário conferem, mas o código de máquina não foi auditado.
 - O app não baixa jogos, e o envio só funciona com PKG que você já tem.
 
-## Catálogo e downloads
-
-O catálogo é um `catalog.json` atualizável sem lançar novo APK, e cada fonte é verificada ao vivo (GitHub Releases ou página oficial). Detalhes, formato e o que não foi verificado: `docs/CATALOGO.md`. Preparo para iOS: `docs/IOS.md`.
+Preparo para iOS: `docs/IOS.md`.
 
 ## Licença
 

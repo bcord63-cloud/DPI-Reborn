@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -32,9 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dpireborn.app.AppViewModel
-import com.dpireborn.app.catalog.CatalogViewModel
 import com.dpireborn.app.ui.theme.BgBlack
 import com.dpireborn.app.ui.theme.DpiTheme
 import com.dpireborn.app.ui.theme.SurfaceDark
@@ -46,13 +43,11 @@ private data class NavTab(val label: String, val icon: ImageVector)
 private val navTabs = listOf(
     NavTab("Início", Icons.Filled.Home),
     NavTab("Arquivos", Icons.Filled.FolderOpen),
-    NavTab("Apps", Icons.Filled.Apps),
     NavTab("Configurações", Icons.Filled.Settings),
 )
 
 @Composable
 fun DpiApp(vm: AppViewModel) {
-    val cvm: CatalogViewModel = viewModel()
     val accentKey by vm.accent.collectAsStateWithLifecycle()
     val active by vm.active.collectAsStateWithLifecycle()
     val accent = accentColor(accentKey)
@@ -66,9 +61,8 @@ fun DpiApp(vm: AppViewModel) {
         LaunchedEffect(Unit) {
             vm.messages.collect { snackbar.showSnackbar(it) }
         }
-        LaunchedEffect(Unit) {
-            cvm.messages.collect { snackbar.showSnackbar(it) }
-        }
+        val showPicker by vm.showPicker.collectAsStateWithLifecycle()
+        if (showPicker) FolderPickerDialog(vm) { vm.showPicker.value = false }
 
         Scaffold(
             containerColor = BgBlack,
@@ -109,9 +103,8 @@ fun DpiApp(vm: AppViewModel) {
                 Crossfade(targetState = tab, animationSpec = tween(180), label = "tabs") { current ->
                     holder.SaveableStateProvider(current) {
                         when (current) {
-                            0 -> HomeScreen(vm, cvm, homeSub, { homeSub = it }, { tab = 2 }, { tab = 1 })
+                            0 -> HomeScreen(vm, homeSub) { homeSub = it }
                             1 -> FilesHubScreen(vm) { homeSub = 2; tab = 0 }
-                            2 -> AppsScreen(cvm, vm)
                             else -> SettingsScreen(vm)
                         }
                     }
