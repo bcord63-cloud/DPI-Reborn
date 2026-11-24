@@ -1,0 +1,55 @@
+name: Verificar catálogo
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir fontes do catalog/catalog.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.request, urllib.error
+          apps = json.load(open("catalog/catalog.json"))["apps"]
+          ids = [a["id"] for a in apps]
+          assert len(ids) == len(set(ids)), "ids duplicados"
+          bad = []
+          def get(url, method="GET", gh=False):
+              h = {"User-Agent": "DPI-Reborn-verify"}
+              if gh:
+                  h["Accept"] = "application/vnd.github+json"
+                  h["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
+              r = urllib.request.Request(url, method=method, headers=h)
+              return urllib.request.urlopen(r, timeout=20)
+          for a in apps:
+              if a.get("removed"): continue
+              if not a["sourceUrl"].startswith("https://"):
+                  bad.append((a["id"], "sourceUrl sem HTTPS")); continue
+              try:
+                  if a.get("github"):
+                      rel = json.load(get(f"https://api.github.com/repos/{a['github']}/releases/latest", gh=True))
+                      rx = re.compile(a.get("assetRegex") or ".")
+                      ok = [x["name"] for x in rel.get("assets", []) if rx.search(x["name"])]
+                      print(f"OK  {a['id']}: {rel['tag_name']} arquivos={ok}")
+                      if not ok: print(f"AVISO {a['id']}: release sem arquivo que case com assetRegex")
+                  else:
+                      try:
+                          get(a["sourceUrl"], "HEAD")
+                      except urllib.error.HTTPError as e:
+                          if e.code in (403, 405, 429): print(f"AVISO {a['id']}: HTTP {e.code} (site bloqueia verificação)"); continue
+                          raise
+                      print(f"OK  {a['id']}: página responde")
+              except Exception as e:
+                  bad.append((a["id"], str(e)))
+          for i, m in bad: print(f"FALHOU {i}: {m}")
+          sys.exit(1 if bad else 0)
+          PY
